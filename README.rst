@@ -10,7 +10,7 @@ Key Features:
     * edit names using regular expressions
     * modify the content using embedded python
     * filter names using embedded python / regular expressions
-    * aply your geek skills xD
+    * apply your geek skills xD
 
 Documentation
 =============
