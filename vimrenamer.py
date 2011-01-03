@@ -13,6 +13,7 @@ import sys
 INICIO = time.time()
 VIMPATH = "/usr/bin/vim" #FIXME: hardcoded
 
+
 def debug(*args):
     """
     Write to stderr for debug
@@ -55,28 +56,41 @@ def move(src, dst):
     """
     The best move implementation ever, just a unix mv wrapper.
     Maybe shutil.move will be a cross plataform option on its next version.
+
+    If dst is "" or None src will be deleted.
     """
-    debug("Moving %s to %s" % (src, dst))
+    
+    if dst in ("", None):
+        debug("Removing %s" % src)
 
-    process = Popen(["", "--", src, dst], 0, "/bin/mv", stderr=PIPE,
-        stdout=PIPE, env={"LANG":"C", "LC_ALL":"C"})
+        process = Popen(["", "--", src], 0, "/bin/rm", stderr=PIPE,
+            stdout=PIPE, env={"LANG":"C", "LC_ALL":"C"})
 
-    error = process.wait()
+        error = process.wait()
 
-    if error == 1:
-        stderr = "\n".join(process.stderr.readlines())
-        errors = {
-            2: r""": cannot create regular file `.*': Permission denied\n""",
-            3: r""": cannot move `.*' to `.*': No such file or directory\n""",
-            4: r""": cannot move `.*' to `.*': Permission denied\n""",
-            5: r""": cannot stat `.*': No such file or directory\n""",
-            }
+    else:
+        debug("Moving %s to %s" % (src, dst))
 
-        while error == 1 and len(errors) > 0:
-            e, r = errors.popitem()
+        process = Popen(["", "--", src, dst], 0, "/bin/mv", stderr=PIPE,
+            stdout=PIPE, env={"LANG":"C", "LC_ALL":"C"})
 
-            if re.match(r, stderr):
-                error = e
+        error = process.wait()
+
+        if error == 1:
+            stderr = "\n".join(process.stderr.readlines())
+            errors = {
+                2: r""": cannot create regular file `.*': Permission denied\n""",
+                3: r""": cannot move `.*' to `.*': No such file or directory\n""",
+                4: r""": cannot move `.*' to `.*': Permission denied\n""",
+                5: r""": cannot stat `.*': No such file or directory\n""",
+                }
+
+            while error == 1 and len(errors) > 0:
+                e, r = errors.popitem()
+
+                if re.match(r, stderr):
+                    error = e
+
 
     return error
 
