@@ -64,9 +64,7 @@ def move(src, dst):
         debug("Removing %s" % src)
 
         os.remove(src)
-#        process = Popen(["", "--", src], 0, "/bin/rm", stderr=PIPE,
-#            stdout=PIPE, env={"LANG":"C", "LC_ALL":"C"})
-#        error = process.wait()
+        error = 0
 
     else:
         debug("Moving %s to %s" % (src, dst))
