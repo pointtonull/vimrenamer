@@ -63,10 +63,10 @@ def move(src, dst):
     if dst in ("", None):
         debug("Removing %s" % src)
 
-        process = Popen(["", "--", src], 0, "/bin/rm", stderr=PIPE,
-            stdout=PIPE, env={"LANG":"C", "LC_ALL":"C"})
-
-        error = process.wait()
+        os.remove(src)
+#        process = Popen(["", "--", src], 0, "/bin/rm", stderr=PIPE,
+#            stdout=PIPE, env={"LANG":"C", "LC_ALL":"C"})
+#        error = process.wait()
 
     else:
         debug("Moving %s to %s" % (src, dst))
@@ -97,7 +97,8 @@ def move(src, dst):
 
 def vimlist(llines, rlines=None):
     """
-    Simple wrapper to the vim editor. if rlines use vimdiff but return only llines.
+    Simple wrapper to the vim editor. if rlines use vimdiff but return only
+    llines.
     """
 
     lname = list2file(llines)
@@ -142,12 +143,14 @@ def main():
     finallist = vimlist(startlist)
 
     while len(startlist) != len(finallist):
-        print("""No se debe modificar la cantidad de lineas, se abrirá un vimdiff con la lista original a la derecha para referencia.""")
+        print("""No se debe modificar la cantidad de lineas, se abrirá un"""
+        """ vimdiff con la lista original a la derecha para referencia.""")
         time.sleep(3)
         finallist = vimlist(finallist, startlist)
     
     changes = [line for line in
-         map(lambda x, y: (x, y) if x != y else None, startlist, finallist) if line]
+         map(lambda x, y: (x, y) if x != y else None, startlist, finallist)
+            if line]
 
     if changes:
         changes = vimlist(changes)
