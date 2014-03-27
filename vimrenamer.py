@@ -3,12 +3,12 @@
 
 """A simple masivefilenames editor that take advantage of the power of VIM"""
 
-import tempfile
+from subprocess import Popen, PIPE
 import os
 import re
-from subprocess import Popen, PIPE
-import time
 import sys
+import tempfile
+import time
 
 INICIO = time.time()
 VIMPATH = "/usr/bin/vim" #FIXME: hardcoded
@@ -54,10 +54,11 @@ def list2file(lines):
 
 def move(src, dst):
     """
-    The best move implementation ever, just a unix mv wrapper.
+    The best "move" implementation ever, just a unix mv wrapper.
     Maybe shutil.move will be a cross plataform option on its next version.
 
-    If dst is "" or None src will be deleted.
+    If dst is "" or None the src file will be deleted.
+    If dst dir does not exist it will be created
     """
     
     if dst in ("", None):
@@ -67,6 +68,11 @@ def move(src, dst):
         error = 0
 
     else:
+        if os.path.sep in dst:
+            dst_dir = os.path.dirname(dst)
+            if not os.path.exists(dst_dir):
+                debug("Creating dest dir %s" % dst_dir)
+                os.makedirs(dst_dir)
         debug("Moving %s to %s" % (src, dst))
 
         process = Popen(["", "--", src, dst], 0, "/bin/mv", stderr=PIPE,
@@ -77,8 +83,10 @@ def move(src, dst):
         if error == 1:
             stderr = "\n".join(process.stderr.readlines())
             errors = {
-                2: r""": cannot create regular file `.*': Permission denied\n""",
-                3: r""": cannot move `.*' to `.*': No such file or directory\n""",
+                2: r""": cannot create regular file `.*': """
+                    """Permission denied\n""",
+                3: r""": cannot move `.*' to `.*': """
+                    """No such file or directory\n""",
                 4: r""": cannot move `.*' to `.*': Permission denied\n""",
                 5: r""": cannot stat `.*': No such file or directory\n""",
                 }
@@ -89,13 +97,12 @@ def move(src, dst):
                 if re.match(r, stderr):
                     error = e
 
-
     return error
 
 
-def vimlist(llines, rlines=None):
+def listeditor(llines, rlines=None):
     """
-    Simple wrapper to the vim editor. if rlines use vimdiff but return only
+    Simple wrapper to the vim editor. If rlines use vimdiff but return only
     llines.
     """
 
@@ -113,13 +120,12 @@ def vimlist(llines, rlines=None):
     return llines 
 
 
-def listdir(path="./"):
+def listdir(path="./", recursive=False):
     """
-    Return a ordened list of dirs and files of the current dir.
+    Return a ordened list of dirs and files of the path.
     """
 
     listdir = os.listdir(path)
-
 
     files = []
     dirs = []
@@ -132,29 +138,30 @@ def listdir(path="./"):
     return sorted(dirs) + sorted(files)
 
 
+
 def main():
     """
     The main function.
     """
 
     startlist = listdir()
-    finallist = vimlist(startlist)
+    finallist = listeditor(startlist)
 
     while len(startlist) != len(finallist):
         print("""No se debe modificar la cantidad de lineas, se abrirá un"""
         """ vimdiff con la lista original a la derecha para referencia.""")
         time.sleep(3)
-        finallist = vimlist(finallist, startlist)
+        finallist = listeditor(finallist, startlist)
     
     changes = [line for line in
          map(lambda x, y: (x, y) if x != y else None, startlist, finallist)
             if line]
 
     if changes:
-        changes = vimlist(changes)
+        changes = listeditor(changes)
 
-        for i in [eval(s) for s in changes]:
-            move(*i)
+        for args in [eval(line) for line in changes]:
+            move(*args)
     else:
         debug("No hay cambios que aplicar.")
 
