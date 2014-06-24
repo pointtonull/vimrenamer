@@ -3,15 +3,45 @@
 
 """A simple masivefilenames editor that take advantage of the power of VIM"""
 
-from subprocess import Popen, PIPE
+import argparse
 import os
 import re
 import sys
 import tempfile
 import time
 
-INICIO = time.time()
+from subprocess import Popen, PIPE, check_output
+
+START_TIME = time.time()
 VIMPATH = "/usr/bin/vim" #FIXME: hardcoded
+
+parser = argparse.ArgumentParser(
+    description="""vimrenamer allows to edit tons of files a dirs names in """
+        """the best text editor ever. If you master vim you can master """
+        """file system xD .""")
+parser.add_argument("-v", '--verbose', action="append_const", dest="verbose",
+    const=1, default=[2], help='Increase the verbosity of the output.')
+parser.add_argument("-q", '--quiet', action="append_const", dest="verbose",
+    const=-1, help='Decrease the verbosity of the output.')
+parser.add_argument("-r", '--recursive', default=False, action="store_true",
+    help="Go through all dirs present in the root dir.")
+parser.add_argument("-l", '--loop', default=False, action="store_true",
+    help="Repeat until no changes are made.")
+
+VERBOSE = 2
+
+def vprint(message, verbose=2):
+    if VERBOSE >= verbose:
+        try:
+            print(message)
+        except UnicodeEncodeError:
+            print(message.encode("utf8"))
+
+error = lambda m: vprint("E: %s" % m, 0)
+warning = lambda m: vprint("W: %s" % m, 1)
+info = lambda m: vprint(m, 2)
+moreinfo = lambda m: vprint("+I: %s" % m, 3)
+debug = lambda m: vprint("D: %s" % m, 4)
 
 
 def debug(*args):
@@ -20,7 +50,7 @@ def debug(*args):
     """
 
     sys.stderr.writelines("".join(
-        ["%7.2f" % (time.time() - INICIO),
+        ["%7.2f" % (time.time() - START_TIME),
         " ",
         " ".join([str(e) for e in args]) + "\n",
         ]))
@@ -57,14 +87,25 @@ def move(src, dst):
     The best "move" implementation ever, just a unix mv wrapper.
     Maybe shutil.move will be a cross plataform option on its next version.
 
-    If dst is "" or None the src file will be deleted.
-    If dst dir does not exist it will be created
-    """
-    
-    if dst in ("", None):
-        debug("Removing %s" % src)
 
-        os.remove(src)
+    If *dst* is "" or None:
+        If *src* is a dir:
+            Deletes dir *src* and all it's empty parents.
+        Else:
+            Deletes file *src*.
+    Else:
+        If *dst* has path.sep:
+            Create *dst* dir and it's parents.
+        Executes "mv *src* *dst*".
+    """
+
+    if dst in ("", None):
+        if src.endswith("/"):
+            debug("Removing directory: %s" % src)
+            os.removedirs(src)
+        else:
+            debug("Removing file: %s" % src)
+            os.remove(src)
         error = 0
 
     else:
@@ -125,15 +166,35 @@ def listdir(path="./", recursive=False):
     Return a ordened list of dirs and files of the path.
     """
 
-    listdir = os.listdir(path)
+    command = "find" if recursive else "ls"
+    listdir = check_output(command)
+    listdir = listdir.splitlines()
 
-    files = []
-    dirs = []
+    files = set()
+    dirs = set()
     for name in listdir:
-        if os.path.isdir(name):
-            dirs.append(name + "/")
+        if recursive:
+            toadd = name[2:]
         else:
-            files.append(name)
+            toadd = name
+        toremove = os.path.join(*os.path.split(toadd)[:-1])
+
+        if os.path.isdir(name):
+            dirs.add(toadd + "/")
+            try:
+                dirs.remove(toremove + "/")
+            except:
+                pass
+        else:
+            files.add(toadd)
+            try:
+                dirs.remove(toremove + "/")
+            except:
+                pass
+            try:
+                files.remove(toremove)
+            except:
+                pass
 
     return sorted(dirs) + sorted(files)
 
@@ -144,26 +205,38 @@ def main():
     The main function.
     """
 
-    startlist = listdir()
-    finallist = listeditor(startlist)
+    OPTIONS = vars(parser.parse_args())
+    VERBOSE = sum(OPTIONS["verbose"])
 
-    while len(startlist) != len(finallist):
-        print("""No se debe modificar la cantidad de lineas, se abrirá un"""
-        """ vimdiff con la lista original a la derecha para referencia.""")
-        time.sleep(3)
-        finallist = listeditor(finallist, startlist)
-    
-    changes = [line for line in
-         map(lambda x, y: (x, y) if x != y else None, startlist, finallist)
-            if line]
+    recursive = OPTIONS['recursive']
+    loop = OPTIONS['loop']
 
-    if changes:
-        changes = listeditor(changes)
+    keep = True
+    while keep:
+        startlist = listdir(recursive=recursive)
+        finallist = listeditor(startlist)
 
-        for args in [eval(line) for line in changes]:
-            move(*args)
-    else:
-        debug("No hay cambios que aplicar.")
+        while len(startlist) != len(finallist):
+            print("""No se debe modificar la cantidad de lineas, se """
+                """abrirá un vimdiff con la lista original a la derecha """
+                """para referencia.""")
+            time.sleep(1)
+            finallist = listeditor(finallist, startlist)
+
+        changes = [line for line in
+             map(lambda x, y: (x, y) if x != y else None, startlist,
+                 finallist) if line]
+
+        if changes:
+            changes = listeditor(changes)
+
+            for args in [eval(line) for line in changes]:
+                move(*args)
+        else:
+            changes = False
+            debug("No hay cambios que aplicar.")
+
+        keep = changes and loop
 
 
 
