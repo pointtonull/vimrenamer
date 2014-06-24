@@ -1,4 +1,4 @@
-.. figure:: http://arnet.no-ip.org/blog/testing.png
+.. figure:: http://cortezcristian.com.ar/blog/wp-content/uploads/2011/11/superVimmerSmall.png
    :align: right
 
 Description
@@ -16,7 +16,7 @@ Documentation
 =============
 
 You can find all the project documentation in the wiki
-http://wiki.github.com/pointtonull/vimrenamer .
+http://wiki.github.com/pointtonull/vimrenamer  .
 
 Colaborate
 ==========
