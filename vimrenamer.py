@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #-*- coding: UTF-8 -*-
 
 """A simple masivefilenames editor that take advantage of the power of VIM"""
@@ -11,24 +11,48 @@ import tempfile
 import time
 
 from subprocess import Popen, PIPE, check_output
+from shutil import which
 
 START_TIME = time.time()
-VIMPATH = "/usr/bin/vim" #FIXME: hardcoded
-
-parser = argparse.ArgumentParser(
-    description="""vimrenamer allows to edit tons of files a dirs names in """
-        """the best text editor ever. If you master vim you can master """
-        """file system xD .""")
-parser.add_argument("-v", '--verbose', action="append_const", dest="verbose",
-    const=1, default=[2], help='Increase the verbosity of the output.')
-parser.add_argument("-q", '--quiet', action="append_const", dest="verbose",
-    const=-1, help='Decrease the verbosity of the output.')
-parser.add_argument("-r", '--recursive', default=False, action="store_true",
-    help="Go through all dirs present in the root dir.")
-parser.add_argument("-l", '--loop', default=False, action="store_true",
-    help="Repeat until no changes are made.")
+VIMPATH = which("vim")
 
 VERBOSE = 2
+
+ORDER_OPTIONS = {
+        "s": (" -S", "Size"),
+        "S": (" -rS", "Reversed size"),
+        "t": (" -t", "Created"),
+        "T": (" -rt", "Reversed created"),
+        "x": (" -X", "Extension"),
+        "X": (" -rX", "Reversed extension"),
+        "u": (" -u1", "Access time"),
+        "U": (" -ru1", "Reversed access time"),
+}
+
+
+def parse_cmd():
+    parser = argparse.ArgumentParser(
+        description="""vimrenamer allows to edit tons of files a dirs names in """
+            """the best text editor ever. If you master vim you can master """
+            """file system xD .""")
+    parser.add_argument("-v", '--verbose', action="append_const", dest="verbose",
+        const=1, default=[2], help='Increase the verbosity of the output.')
+    parser.add_argument("-q", '--quiet', action="append_const", dest="verbose",
+        const=-1, help='Decrease the verbosity of the output.')
+    parser.add_argument("-r", '--recursive', default=False, action="store_true",
+        help="Go through all dirs present in the root dir.")
+    parser.add_argument("-l", '--loop', default=False, action="store_true",
+        help="Repeat until no changes are made.")
+    parser.add_argument("-s", '--safe', default=False, action="store_true",
+        help="Avoid moving a file over a existing one.")
+    parser.add_argument("-o", "--order", dest="order", help="""Especify sorting
+                        option, any of: %s""" % ", ".join( "'%s' %s" % (opt, value[1])
+                            for opt, value in ORDER_OPTIONS.items()),
+                        metavar="order", choices=ORDER_OPTIONS, default=None)
+
+    options = vars(parser.parse_args())
+    return options
+
 
 def vprint(message, verbose=2):
     if VERBOSE >= verbose:
@@ -82,21 +106,31 @@ def list2file(lines):
     return tmp_name
 
 
-def move(src, dst):
+def move(src, dst, safe=False):
     """
-    The best "move" implementation ever, just a unix mv wrapper.
-    Maybe shutil.move will be a cross plataform option on its next version.
-
-
     If *dst* is "" or None:
         If *src* is a dir:
             Deletes dir *src* and all it's empty parents.
         Else:
             Deletes file *src*.
+
     Else:
         If *dst* has path.sep:
             Create *dst* dir and it's parents.
-        Executes "mv *src* *dst*".
+
+        If *dst* is dir:
+            join *dst* filename(*source*)
+
+        If *safe* and *dst* it's a file:
+            Split *dst* into (basename, extension)
+            If basename(*dst*) ends with "(number)":
+                Increase number in *basename*
+            Else:
+                Append "(2)" to *basename*
+            Recurse move(*src*, *basename*.*extension*)
+        Else:
+            Convert *dst* to *absdst*
+            Exec command "mv *src* *dst*".
     """
 
     if dst in ("", None):
@@ -114,29 +148,52 @@ def move(src, dst):
             if not os.path.exists(dst_dir):
                 debug("Creating dest dir %s" % dst_dir)
                 os.makedirs(dst_dir)
-        debug("Moving %s to %s" % (src, dst))
 
-        process = Popen(["", "--", src, dst], 0, "/bin/mv", stderr=PIPE,
-            stdout=PIPE, env={"LANG":"C", "LC_ALL":"C"})
+        if os.path.isdir(dst):
+            src_basename = os.path.basename(src)
+            dst = os.path.join(dst, src_basename)
 
-        error = process.wait()
+        if safe and os.path.isfile(dst):
+            basename, extension = os.path.splitext(dst)
+            match = re.match(r"(?P<basename>.+?) \((?P<number>\d+)\)", basename)
+            if match:
+                basename = match.group("basename")
+                number = int(match.group("number"))
+                dst = "%s (%d)%s" % (basename, number + 1, extension)
+            else:
+                dst = "%s (2)%s" % (basename, extension)
+            return move(src, dst, safe)
+        else:
+            debug("Moving %s to %s" % (src, dst))
+            error = mv(src, dst)
 
-        if error == 1:
-            stderr = "\n".join(process.stderr.readlines())
-            errors = {
-                2: r""": cannot create regular file `.*': """
-                    """Permission denied\n""",
-                3: r""": cannot move `.*' to `.*': """
-                    """No such file or directory\n""",
-                4: r""": cannot move `.*' to `.*': Permission denied\n""",
-                5: r""": cannot stat `.*': No such file or directory\n""",
-                }
+    return error
 
-            while error == 1 and len(errors) > 0:
-                e, r = errors.popitem()
 
-                if re.match(r, stderr):
-                    error = e
+def mv(src, dst):
+    """
+    The best "move" implementation ever, just a unix mv wrapper.
+    Maybe shutil.move will be a cross plataform option on its next version.
+    """
+    process = Popen(["", "--", src, dst], 0, "/bin/mv", stderr=PIPE,
+        stdout=PIPE, env={"LANG":"C", "LC_ALL":"C"})
+
+    error = process.wait()
+
+    if error == 1:
+        stderr = "\n".join(process.stderr.readlines())
+        errors = {
+            2: r""": cannot create regular file `.*': Permission denied$""",
+            3: r""": cannot move .*: No such file or directory$""",
+            4: r""": cannot move .*: Permission denied$""",
+            5: r""": cannot stat `.*': No such file or directory\n""",
+            }
+
+        while error == 1 and len(errors) > 0:
+            e, r = errors.popitem()
+
+            if re.match(r, stderr):
+                error = "    " + stderr
 
     return error
 
@@ -161,32 +218,44 @@ def listeditor(llines, rlines=None):
     return llines 
 
 
-def listdir(path="./", recursive=False):
+def listdir(path="./", recursive=False, order=None):
     """
     Return a ordened list of dirs and files of the path.
     """
 
-    command = "find" if recursive else "ls"
-    listdir = check_output(command)
+    if order:
+        order_option, order_name = ORDER_OPTIONS[order]
+
+    if recursive:
+        command = """ls -R1Q %s| awk -F '"' '/:$/{dir=$2} /"$/{print dir "/" $2}'"""
+    else:
+        command = "/bin/ls %s"
+
+    command = command % order_option
+    debug("Order:", order_name)
+    debug("Command:", command)
+
+    listdir = check_output(command, shell=True)
     listdir = listdir.splitlines()
 
-    files = set()
-    dirs = set()
+    files = []
+    dirs = []
     for name in listdir:
+        name = name.decode()
         if recursive:
             toadd = name[2:]
         else:
             toadd = name
         toremove = os.path.join(*os.path.split(toadd)[:-1])
 
-        if os.path.isdir(name):
-            dirs.add(toadd + "/")
+        if os.path.isdir(name) and not os.path.islink(name):
+            dirs.append(toadd + "/")
             try:
                 dirs.remove(toremove + "/")
             except:
                 pass
-        else:
-            files.add(toadd)
+        elif os.path.isfile(name):
+            files.append(toadd)
             try:
                 dirs.remove(toremove + "/")
             except:
@@ -195,8 +264,23 @@ def listdir(path="./", recursive=False):
                 files.remove(toremove)
             except:
                 pass
+        elif os.path.islink(name):
+            files.append(toadd)
+            try:
+                dirs.remove(toremove + "/")
+            except:
+                pass
+            try:
+                files.remove(toremove)
+            except:
+                pass
+        else:
+            debug("Filetype not supported %s" % name)
 
-    return sorted(dirs) + sorted(files)
+    if order:
+        return dirs + files
+    else:
+        return sorted(dirs) + sorted(files)
 
 
 
@@ -205,15 +289,18 @@ def main():
     The main function.
     """
 
-    OPTIONS = vars(parser.parse_args())
-    VERBOSE = sum(OPTIONS["verbose"])
+    global VERBOSE
+    options = parse_cmd()
+    VERBOSE = sum(options["verbose"])
 
-    recursive = OPTIONS['recursive']
-    loop = OPTIONS['loop']
+    recursive = options['recursive']
+    loop = options['loop']
+    safe = options['safe']
+    order = options['order']
 
     keep = True
     while keep:
-        startlist = listdir(recursive=recursive)
+        startlist = listdir(recursive=recursive, order=order)
         finallist = listeditor(startlist)
 
         while len(startlist) != len(finallist):
@@ -230,8 +317,10 @@ def main():
         if changes:
             changes = listeditor(changes)
 
-            for args in [eval(line) for line in changes]:
-                move(*args)
+            for src, dst in [eval(line) for line in changes]:
+                error = move(src, dst, safe)
+                if error:
+                    print(error)
         else:
             changes = False
             debug("No hay cambios que aplicar.")
