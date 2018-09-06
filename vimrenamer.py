@@ -198,6 +198,28 @@ def mv(src, dst):
     return error
 
 
+def parse_cmd(cmd, filename):
+    """
+    Returns `cmd` replacing "{}" with the escaped filename.
+    If "{}" is not present appends `filename` to the end.
+    """
+    filename = '"%s"' % filename #FIXME: escape
+    if "{}" in cmd:
+        return cmd.replace("{}", filename)
+    else:
+        return cmd + " " + filename
+
+
+def execute(cmd):
+    """
+    Executes `cmd`. Waits for the command to finish.
+    """
+    cmd = cmd[1:]
+    debug("Executing '%s'" % cmd)
+    process = Popen(cmd, shell=True)
+    error = process.wait()
+
+
 def listeditor(llines, rlines=None):
     """
     Simple wrapper to the vim editor. If rlines use vimdiff but return only
@@ -225,6 +247,8 @@ def listdir(path="./", recursive=False, order=None):
 
     if order:
         order_option, order_name = ORDER_OPTIONS[order]
+    else:
+        order_option, order_name = "", "Default order"
 
     if recursive:
         command = """ls -R1Q %s| awk -F '"' '/:$/{dir=$2} /"$/{print dir "/" $2}'"""
@@ -310,15 +334,25 @@ def main():
             time.sleep(1)
             finallist = listeditor(finallist, startlist)
 
-        changes = [line for line in
-             map(lambda x, y: (x, y) if x != y else None, startlist,
-                 finallist) if line]
+        changes = [(sline, fline)
+                   for (sline, fline) in zip(startlist, finallist)
+                   if sline != fline]
 
         if changes:
+            for pos, change in enumerate(changes):
+                src, dst = change
+                if dst.startswith("!"):
+                    dst = parse_cmd(dst, src)
+                    change = (src, dst)
+                    changes[pos] = change
             changes = listeditor(changes)
 
-            for src, dst in [eval(line) for line in changes]:
-                error = move(src, dst, safe)
+            for line in changes:
+                src, dst = eval(line)
+                if dst.startswith("!"):
+                    error = execute(dst)
+                else:
+                    error = move(src, dst, safe)
                 if error:
                     print(error)
         else:
