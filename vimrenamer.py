@@ -30,7 +30,7 @@ ORDER_OPTIONS = {
 }
 
 
-def parse_cmd():
+def parse_options():
     parser = argparse.ArgumentParser(
         description="""vimrenamer allows to edit tons of files a dirs names in """
             """the best text editor ever. If you master vim you can master """
@@ -290,7 +290,7 @@ def main():
     """
 
     global VERBOSE
-    options = parse_cmd()
+    options = parse_options()
     VERBOSE = sum(options["verbose"])
 
     recursive = options['recursive']
