@@ -51,6 +51,8 @@ def parse_options():
                         option, any of: %s""" % ", ".join( "'%s' %s" % (opt, value[1])
                             for opt, value in ORDER_OPTIONS.items()),
                         metavar="order", choices=ORDER_OPTIONS, default=None)
+    parser.add_argument("directory", help="""If specified will set PWD before
+                        stating the edition.""", nargs="?", default="./")
 
     options = vars(parser.parse_args())
     return options
@@ -330,6 +332,8 @@ def main():
     show_all = options['all']
     safe = options['safe']
     order = options['order']
+    directory = options['directory']
+    os.chdir(directory)
 
     keep = True
     while keep:
