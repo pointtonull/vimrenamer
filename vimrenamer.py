@@ -39,6 +39,8 @@ def parse_options():
         const=1, default=[2], help='Increase the verbosity of the output.')
     parser.add_argument("-q", '--quiet', action="append_const", dest="verbose",
         const=-1, help='Decrease the verbosity of the output.')
+    parser.add_argument("-a", '--all', default=False, action="store_true",
+        help="Show hidden files.")
     parser.add_argument("-r", '--recursive', default=False, action="store_true",
         help="Go through all dirs present in the root dir.")
     parser.add_argument("-l", '--loop', default=False, action="store_true",
@@ -240,22 +242,28 @@ def listeditor(llines, rlines=None):
     return llines 
 
 
-def listdir(path="./", recursive=False, order=None):
+def listdir(path="./", recursive=False, order=None, show_all=None):
     """
     Return a ordened list of dirs and files of the path.
     """
 
+    options = []
     if order:
         order_option, order_name = ORDER_OPTIONS[order]
+        options.append(order_option)
     else:
-        order_option, order_name = "", "Default order"
+        order_name = "Default order"
+
+    if show_all:
+        options.append("--all")
 
     if recursive:
-        command = """ls -R1Q %s| awk -F '"' '/:$/{dir=$2} /"$/{print dir "/" $2}'"""
+        command = """ls -R1Q %s| awk -F '"' '/:$/{dir=$2} /"$/&&(!/"."/&&!/".."/){
+            print dir "/" $2}'"""
     else:
         command = "/bin/ls %s"
 
-    command = command % order_option
+    command = command % " ".join(options)
     debug("Order:", order_name)
     debug("Command:", command)
 
@@ -319,12 +327,13 @@ def main():
 
     recursive = options['recursive']
     loop = options['loop']
+    show_all = options['all']
     safe = options['safe']
     order = options['order']
 
     keep = True
     while keep:
-        startlist = listdir(recursive=recursive, order=order)
+        startlist = listdir(recursive=recursive, order=order, show_all=show_all)
         finallist = listeditor(startlist)
 
         while len(startlist) != len(finallist):
