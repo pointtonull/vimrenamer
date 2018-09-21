@@ -207,6 +207,7 @@ def parse_cmd(cmd, filename):
     Returns `cmd` replacing "{}" with the escaped filename.
     If "{}" is not present appends `filename` to the end.
     """
+    cmd = cmd[1:]
     filename = '"%s"' % filename #FIXME: escape
     if "{}" in cmd:
         return cmd.replace("{}", filename)
@@ -218,7 +219,6 @@ def execute(cmd):
     """
     Executes `cmd`. Waits for the command to finish.
     """
-    cmd = cmd[1:]
     debug("Executing '%s'" % cmd)
     process = Popen(cmd, shell=True)
     error = process.wait()
@@ -356,13 +356,13 @@ def main():
                 src, dst = change
                 if dst.startswith("!"):
                     dst = parse_cmd(dst, src)
-                    change = (src, dst)
+                    change = ("!", dst)
                     changes[pos] = change
             changes = listeditor(changes)
 
             for line in changes:
                 src, dst = eval(line)
-                if dst.startswith("!"):
+                if src == "!":
                     error = execute(dst)
                 else:
                     error = move(src, dst, safe)
