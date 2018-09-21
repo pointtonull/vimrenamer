@@ -3,15 +3,15 @@
 
 """A simple masivefilenames editor that take advantage of the power of VIM"""
 
+from pipes import quote
+from shutil import which
+from subprocess import Popen, PIPE, check_output
 import argparse
 import os
 import re
 import sys
 import tempfile
 import time
-
-from subprocess import Popen, PIPE, check_output
-from shutil import which
 
 START_TIME = time.time()
 VIMPATH = which("vim")
@@ -204,11 +204,11 @@ def mv(src, dst):
 
 def parse_cmd(cmd, filename):
     """
-    Returns `cmd` replacing "{}" with the escaped filename.
+    Returns `cmd` replacing "{}" with the filename.
     If "{}" is not present appends `filename` to the end.
     """
     cmd = cmd[1:]
-    filename = '"%s"' % filename #FIXME: escape
+    filename = quote(filename)
     if "{}" in cmd:
         return cmd.replace("{}", filename)
     else:
