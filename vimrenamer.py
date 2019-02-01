@@ -140,7 +140,14 @@ def move(src, dst, safe=False):
     if dst in ("", None):
         if src.endswith("/"):
             debug("Removing directory: %s" % src)
-            os.removedirs(src)
+            try:
+                os.removedirs(src)
+            except OSError as error:
+                if "Directory not empty" in error.strerror:
+                    print("\nError: To delete a non-empty directory enable recursion `-r`.")
+                    error = 3
+                else:
+                    raise
         else:
             debug("Removing file: %s" % src)
             os.remove(src)
@@ -235,7 +242,12 @@ def listeditor(llines, rlines=None):
     if rlines:
         rname = list2file(rlines)
         assert Popen(["", "-d", lname, rname], 0, VIMPATH).wait() == 0
-        os.remove(rname)
+        try:
+            os.remove(rname)
+        except OSError as error:
+            print(dir(error))
+            print(error)
+            raise
     else:
         assert Popen(["", lname], 0, VIMPATH).wait() == 0
 
