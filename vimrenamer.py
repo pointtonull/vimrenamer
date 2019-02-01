@@ -260,8 +260,12 @@ def listdir(path="./", recursive=False, order=None, show_all=None):
         options.append("--all")
 
     if recursive:
-        command = """ls -R1Q %s| awk -F '"' '/:$/{dir=$2} /"$/&&(!/"."/&&!/".."/){
-            print dir "/" $2}'"""
+        command = (
+                   r"""ls -R1Q %s | """
+                   r"""awk -F '"' """
+                   r"""'/:$/{dir=$2} """
+                   r"""/"$/&&(!/"\."/&&!/"\.\."/){print dir "/" $2}'"""
+                  )
     else:
         command = "/bin/ls %s"
 
