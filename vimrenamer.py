@@ -365,7 +365,10 @@ def main():
             changes = listeditor(changes)
 
             for line in changes:
-                src, dst = eval(line)
+                try:
+                    src, dst = eval(line)
+                except SyntaxError as error:
+                    raise SyntaxError("%s `%s`" % (error, line))
                 if src == "!":
                     error = execute(dst)
                 else:
